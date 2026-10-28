@@ -412,7 +412,7 @@ def draw_qr():
 
 
 def update():
-    if badge.pressed(BUTTON_BACK):
+    if badge.pressed(BUTTON_BACK) or badge.pressed(BUTTON_SELECT):
         return False
 
     tilt.update()
