@@ -18,9 +18,9 @@ except ImportError:
 badge.mode(HIRES | VSYNC)
 screen.antialias = image.X2
 
-phosphor = color.rgb(90, 160, 255, 170)
-white = color.rgb(235, 245, 255)
-faded = color.rgb(235, 245, 255, 100)
+phosphor = color.rgb(130, 190, 255)
+white = color.rgb(255, 255, 255)
+faded = color.rgb(235, 245, 255, 160)
 spinner = color.rgb(49, 122, 255, 60)
 black = color.rgb(0, 0, 0)
 
@@ -29,9 +29,9 @@ mona_sans = missing_details.mona_sans()
 APP_DIR = "/system/apps/bluebox_badge"
 logo = image.load(f"{APP_DIR}/logo.png")
 
-NAME_SIZE = 16
+NAME_SIZE = 20
 VALUE_SIZE = 28
-LABEL_SIZE = 14
+LABEL_SIZE = 16
 NUDGE_SIZE = 17
 NUDGE_RECT = (176, 70, 136, 150)
 
@@ -148,10 +148,10 @@ class Download:
 class User:
     levels = [
         color.rgb(6, 10, 22),
-        color.rgb(5, 24, 66),
-        color.rgb(0, 49, 140),
-        color.rgb(0, 81, 220),
-        color.rgb(49, 122, 255),
+        color.rgb(5, 20, 52),
+        color.rgb(6, 34, 88),
+        color.rgb(8, 48, 120),
+        color.rgb(14, 66, 156),
     ]
 
     def __init__(self, handle):
@@ -304,7 +304,7 @@ class User:
         draw_logo(status)
 
         screen.pen = phosphor
-        center_text(placeholder_if_none(self.name), 36, NAME_SIZE)
+        center_text(placeholder_if_none(self.name), 38, NAME_SIZE)
 
         self.draw_stat("followers", self.followers, 176, 66)
         self.draw_stat("contribs", self.contribs, 176, 124)
@@ -318,7 +318,7 @@ def draw_logo(status=None):
     if status:
         screen.font = mona_sans
         screen.pen = faded
-        center_text(status, 36 + NAME_SIZE + 2, 12)
+        center_text(status, 38 + NAME_SIZE + 2, 14)
 
 
 def center_text(text, y, size):
@@ -355,7 +355,7 @@ def draw_simple(status):
     draw_logo()
     screen.font = mona_sans
     screen.pen = phosphor
-    center_text(contact_name or handle or linkedin, 36, NAME_SIZE)
+    center_text(contact_name or handle or linkedin, 38, NAME_SIZE)
     badgelink.draw_identicon(screen, badge_id, 10, 74, AVATAR_SIZE)
 
     if not handle:
