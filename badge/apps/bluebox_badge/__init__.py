@@ -39,6 +39,9 @@ CONTRIB_URL = "https://github.com/{user}.contribs"
 USER_AVATAR = "https://wsrv.nl/?url=https://github.com/{user}.png&w=150&output=png"
 DETAILS_URL = "https://api.github.com/users/{user}"
 
+QR_URL = "https://bluebox.ai"
+QR_DRAW = 198
+
 CACHE_DIR = "/state"
 USER_FILE = f"{CACHE_DIR}/bluebox_user.json"
 CONTRIB_FILE = f"{CACHE_DIR}/bluebox_contribs.json"
@@ -101,6 +104,35 @@ class Tilt:
 
 
 tilt = Tilt()
+
+
+class FlatDetector:
+    ENTER = 0.8
+    EXIT = 0.6
+    HOLD_MS = 250
+
+    def __init__(self):
+        self.flat = False
+        self.candidate_since = None
+        self.level = 0.0
+
+    def update(self):
+        ax, ay, az = badge.imu()[:3]
+        norm = math.sqrt(ax * ax + ay * ay + az * az) or 1.0
+        self.level += (abs(az) / norm - self.level) * 0.2
+        want = self.level > (self.EXIT if self.flat else self.ENTER)
+        if want == self.flat:
+            self.candidate_since = None
+        elif self.candidate_since is None:
+            self.candidate_since = badge.ticks
+        elif badge.ticks - self.candidate_since >= self.HOLD_MS:
+            self.flat = want
+            self.candidate_since = None
+        return self.flat
+
+
+flat = FlatDetector()
+qr_code = image.qr(QR_URL, image.QR_LOW, 4)
 
 
 def fake_number():
@@ -370,8 +402,21 @@ def draw_simple(status):
     screen.text(nudge, rect(*NUDGE_RECT), NUDGE_SIZE, align=(LEFT, TOP))
 
 
+def draw_qr():
+    screen.pen = color.rgb(255, 255, 255)
+    screen.clear()
+    screen.blit(qr_code, rect(0, 0, qr_code.width, qr_code.height), rect((screen.width - QR_DRAW) // 2, 8, QR_DRAW, QR_DRAW))
+    screen.font = mona_sans
+    screen.pen = color.rgb(0, 49, 140)
+    center_text("bluebox.ai", 212, 22)
+
+
 def update():
     tilt.update()
+
+    if flat.update():
+        draw_qr()
+        return
 
     screen.pen = black
     screen.clear()
