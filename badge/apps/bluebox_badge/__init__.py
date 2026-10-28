@@ -6,6 +6,8 @@ import random
 
 import fetch
 import machine
+import time
+import ntptime
 import missing_details
 import wifi
 from badgeware import link as badgelink
@@ -400,6 +402,54 @@ page = 0
 combo = False
 
 
+TZ_STD_HOURS = -8  # US Pacific; DST (PDT, UTC-7) applies between the second Sunday of March and the first Sunday of November
+SYNC_RETRY_MS = 30000
+next_sync = 0
+
+
+def us_dst_active(utc):
+    year = time.gmtime(utc)[0]
+
+    def nth_sunday(month, n):
+        first = time.mktime((year, month, 1, 0, 0, 0, 0, 0))
+        wd = time.gmtime(first)[6]
+        return first + ((6 - wd) % 7 + (n - 1) * 7) * 86400
+
+    start = nth_sunday(3, 2) + (2 - TZ_STD_HOURS) * 3600
+    end = nth_sunday(11, 1) + (2 - TZ_STD_HOURS - 1) * 3600
+    return start <= utc < end
+
+
+def clock_unset():
+    try:
+        return machine.RTC().datetime()[0] < 2024
+    except Exception:
+        return False
+
+
+def sync_time():
+    global next_sync
+    if not clock_unset() or badge.ticks < next_sync:
+        return
+    try:
+        if missing_details.missing("WIFI_SSID"):
+            next_sync = badge.ticks + SYNC_RETRY_MS
+            return
+        if not wifi.is_connected():
+            if not wifi.connect():
+                if wifi.failure():
+                    next_sync = badge.ticks + SYNC_RETRY_MS
+                return
+        ntptime.settime()
+        utc = time.mktime(time.gmtime())
+        local = utc + (TZ_STD_HOURS + (1 if us_dst_active(utc) else 0)) * 3600
+        tm = time.gmtime(local)
+        machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+    except Exception as e:
+        print(f"Badge: time sync failed ({e})")
+    next_sync = badge.ticks + SYNC_RETRY_MS
+
+
 def time_text():
     try:
         t = machine.RTC().datetime()
@@ -426,7 +476,7 @@ def draw_sensor_page(status):
     center_text(user.name or contact_name or handle or "bluebox.ai", 38, NAME_SIZE)
 
     draw_stat_text("time", time_text(), 176, 66)
-    draw_stat_text("temp", "--" if sensor.temp is None else "%.1f C" % sensor.temp, 176, 124)
+    draw_stat_text("temp", "--" if sensor.temp is None else "%.1f F" % (sensor.temp * 9 / 5 + 32), 176, 124)
     draw_stat_text("humidity", "--" if sensor.hum is None else "%d%%" % round(sensor.hum), 176, 182)
 
     if user.avatar:
@@ -531,6 +581,7 @@ def update():
         combo = False
 
     sensor.poll()
+    sync_time()
     status = user.fetch_step() if handle else None
     if page == 1:
         draw_sensor_page(status)
