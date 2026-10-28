@@ -6,7 +6,7 @@ It mirrors the stock GitHub profile app: avatar bottom-left, followers, contribs
 
 ## Usage
 
-Open **Bluebox Badge** from the menu. Set your GitHub username (and optionally name and LinkedIn) in Settings. Hold LEFT and RIGHT together to refresh. Lay the badge flat (screen facing up) to show a QR code linking to https://bluebox.ai; hold it upright again to return to the profile. HOME returns to the menu.
+Open **Bluebox Badge** from the menu. Set your GitHub username (and optionally name and LinkedIn) in Settings. Hold LEFT and RIGHT together to refresh. Lay the badge flat (screen facing up) to show a QR code linking to https://bluebox.ai; hold it upright again to return to the profile. BACK or HOME returns to the menu.
 
 ## Requirements
 
