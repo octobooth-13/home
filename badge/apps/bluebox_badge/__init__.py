@@ -402,9 +402,16 @@ page = 0
 combo = False
 
 
-TZ_STD_HOURS = -8  # US Pacific; DST (PDT, UTC-7) applies between the second Sunday of March and the first Sunday of November
+TZ_STD_HOURS = -5  # fallback: America/Detroit (US Eastern); DST (EDT, UTC-4) applies between the second Sunday of March and the first Sunday of November
+TZ_FILE = f"{CACHE_DIR}/bluebox_tz.json"
+TZ_URL = "https://ipwho.is/?fields=success,timezone"
+TZ_MAX_AGE = 86400
 SYNC_RETRY_MS = 30000
+TZ_IDLE_MS = 600000
 next_sync = 0
+tz_request = None
+tz_started = 0
+tz_info = None
 
 
 def us_dst_active(utc):
@@ -427,27 +434,102 @@ def clock_unset():
         return False
 
 
+def fallback_offset(utc):
+    return (TZ_STD_HOURS + (1 if us_dst_active(utc) else 0)) * 3600
+
+
+def load_tz():
+    global tz_info
+    if tz_info is None:
+        try:
+            with open(TZ_FILE, "r") as f:
+                tz_info = json.load(f)
+        except (OSError, ValueError):
+            tz_info = {}
+    return tz_info
+
+
+def save_tz():
+    try:
+        with open(TZ_FILE, "w") as f:
+            json.dump(tz_info, f)
+    except OSError as e:
+        print(f"Badge: tz save failed ({e})")
+
+
+def set_rtc(local):
+    tm = time.gmtime(local)
+    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+
+
+def read_tz_response():
+    with open(TZ_FILE + ".tmp", "r") as f:
+        data = json.load(f)
+    os.remove(TZ_FILE + ".tmp")
+    if not data.get("success"):
+        raise ValueError("lookup failed")
+    return int(data["timezone"]["offset"])
+
+
 def sync_time():
-    global next_sync
-    if not clock_unset() or badge.ticks < next_sync:
+    global next_sync, tz_request, tz_started
+    if badge.ticks < next_sync:
+        return
+    unset = clock_unset()
+    info = load_tz()
+    applied = info.get("applied")
+    stale = unset or applied is None or time.mktime(time.gmtime()) - applied - info.get("at", 0) > TZ_MAX_AGE
+    if not stale:
+        next_sync = badge.ticks + TZ_IDLE_MS
         return
     try:
         if missing_details.missing("WIFI_SSID"):
-            next_sync = badge.ticks + SYNC_RETRY_MS
+            next_sync = badge.ticks + (SYNC_RETRY_MS if unset else TZ_IDLE_MS)
             return
         if not wifi.is_connected():
-            if not wifi.connect():
-                if wifi.failure():
+            if unset:
+                if not wifi.connect() and wifi.failure():
                     next_sync = badge.ticks + SYNC_RETRY_MS
-                return
-        ntptime.settime()
-        utc = time.mktime(time.gmtime())
-        local = utc + (TZ_STD_HOURS + (1 if us_dst_active(utc) else 0)) * 3600
-        tm = time.gmtime(local)
-        machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+            else:
+                next_sync = badge.ticks + 60000
+            return
+
+        detected = None
+        if tz_request is None:
+            tz_request = fetch.url(TZ_URL).to(TZ_FILE + ".tmp")
+            tz_started = badge.ticks
+            return
+        if tz_request:
+            tz_request = None
+            detected = read_tz_response()
+        elif tz_request.error or badge.ticks - tz_started > 20000:
+            print(f"Badge: tz lookup failed ({tz_request.error})")
+            tz_request = None
+        else:
+            return
+
+        if unset:
+            ntptime.settime()
+            utc = time.mktime(time.gmtime())
+            offset = detected if detected is not None else info.get("offset")
+            if offset is None:
+                offset = fallback_offset(utc)
+            set_rtc(utc + offset)
+            applied = offset
+        elif detected is not None:
+            if applied is not None and detected != applied:
+                set_rtc(time.mktime(time.gmtime()) + detected - applied)
+            applied = detected
+
+        if detected is not None:
+            info["offset"] = detected
+            info["at"] = time.mktime(time.gmtime()) - applied
+        info["applied"] = applied
+        save_tz()
     except Exception as e:
         print(f"Badge: time sync failed ({e})")
-    next_sync = badge.ticks + SYNC_RETRY_MS
+        tz_request = None
+    next_sync = badge.ticks + (SYNC_RETRY_MS if clock_unset() else TZ_IDLE_MS)
 
 
 def time_text():
