@@ -6,8 +6,8 @@ It mirrors the stock GitHub profile app: avatar bottom-left, followers, contribs
 
 ## Usage
 
-Open **Bluebox Badge** from the menu. Set your GitHub username (and optionally name and LinkedIn) in Settings. Hold LEFT and RIGHT together to refresh. Lay the badge flat (screen facing up) to show a QR code linking to https://bluebox.ai; hold it upright again to return to the profile. BACK (or the SELECT button) or HOME returns to the menu.
+Open **Bluebox Badge** from the menu. Set your GitHub username (and optionally name and LinkedIn) in Settings. Hold LEFT and RIGHT together to refresh. Press LEFT or RIGHT to swap between the profile stats (default) and a second page showing the time (HH:MM from the badge clock, `--:--` if unset), temperature (in °C) and humidity from an optional SHT45 sensor (`--` if none). Lay the badge flat (screen facing up) to show a QR code linking to https://bluebox.ai; hold it upright again to return to the profile. BACK (or the SELECT button) or HOME returns to the menu.
 
 ## Requirements
 
-Wi-Fi is needed to fetch your profile, contributions and avatar (cached under `/state`). No credentials are stored in the app. An optional `GITHUB_TOKEN` in `secrets.py` raises API rate limits.
+Wi-Fi is needed to fetch your profile, contributions and avatar (cached under `/state`). The temperature and humidity page needs an Adafruit SHT45 on the Qw/ST connector (I2C address 0x44). No credentials are stored in the app. An optional `GITHUB_TOKEN` in `secrets.py` raises API rate limits.

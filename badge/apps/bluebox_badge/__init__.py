@@ -345,6 +345,96 @@ class User:
         self.draw_avatar()
 
 
+class SHT4x:
+    ADDR = 0x44
+    POLL_MS = 2000
+    MEASURE_MS = 10
+
+    def __init__(self):
+        self.i2c = None
+        self.temp = None
+        self.hum = None
+        self.started = None
+        self.next_poll = 0
+        try:
+            self.i2c = machine.I2C()
+        except Exception as e:
+            print(f"Badge: no I2C ({e})")
+
+    @staticmethod
+    def crc8(data):
+        crc = 0xFF
+        for b in data:
+            crc ^= b
+            for _ in range(8):
+                crc = ((crc << 1) ^ 0x31) & 0xFF if crc & 0x80 else (crc << 1) & 0xFF
+        return crc
+
+    def poll(self):
+        if self.i2c is None:
+            return
+        now = badge.ticks
+        try:
+            if self.started is None:
+                if now < self.next_poll:
+                    return
+                self.i2c.writeto(self.ADDR, b"\xfd")
+                self.started = now
+            elif now - self.started >= self.MEASURE_MS:
+                d = self.i2c.readfrom(self.ADDR, 6)
+                self.started = None
+                self.next_poll = now + self.POLL_MS
+                if self.crc8(d[0:2]) != d[2] or self.crc8(d[3:5]) != d[5]:
+                    raise ValueError("crc")
+                self.temp = -45 + 175 * ((d[0] << 8) | d[1]) / 65535
+                self.hum = min(100, max(0, -6 + 125 * ((d[3] << 8) | d[4]) / 65535))
+        except Exception:
+            self.started = None
+            self.next_poll = now + self.POLL_MS
+            self.temp = None
+            self.hum = None
+
+
+sensor = SHT4x()
+page = 0
+combo = False
+
+
+def time_text():
+    try:
+        t = machine.RTC().datetime()
+        if t[0] < 2024:
+            return "--:--"
+        return "%02d:%02d" % (t[4], t[5])
+    except Exception:
+        return "--:--"
+
+
+def draw_stat_text(title, text, x, y):
+    screen.font = mona_sans
+    screen.pen = white
+    screen.text(text, x, y, VALUE_SIZE)
+    screen.pen = phosphor
+    screen.text(title, x, y + VALUE_SIZE + 2, LABEL_SIZE)
+
+
+def draw_sensor_page(status):
+    user.draw_graph()
+    screen.font = mona_sans
+    draw_logo(status)
+    screen.pen = phosphor
+    center_text(user.name or contact_name or handle or "bluebox.ai", 38, NAME_SIZE)
+
+    draw_stat_text("time", time_text(), 176, 66)
+    draw_stat_text("temp", "--" if sensor.temp is None else "%.1f C" % sensor.temp, 176, 124)
+    draw_stat_text("humidity", "--" if sensor.hum is None else "%d%%" % round(sensor.hum), 176, 182)
+
+    if user.avatar:
+        user.draw_avatar()
+    else:
+        badgelink.draw_identicon(screen, badge_id, 10, 74, AVATAR_SIZE)
+
+
 def draw_logo(status=None):
     screen.blit(logo, vec2(screen.width / 2 - logo.width / 2, 4))
     if status:
@@ -428,12 +518,23 @@ def update():
         missing_details.show([], user.draw_graph, ("your name, GitHub username,", "and LinkedIn stub"))
         return
 
+    global page, combo
     both_held = badge.held(BUTTON_LEFT) and badge.held(BUTTON_RIGHT)
     if handle and both_held and (badge.pressed(BUTTON_LEFT) or badge.pressed(BUTTON_RIGHT)):
         user.update(True)
+    if both_held:
+        combo = True
+    elif badge.released(BUTTON_LEFT) or badge.released(BUTTON_RIGHT):
+        if not combo:
+            page = 1 - page
+    if not badge.held(BUTTON_LEFT) and not badge.held(BUTTON_RIGHT):
+        combo = False
 
+    sensor.poll()
     status = user.fetch_step() if handle else None
-    if user.loaded:
+    if page == 1:
+        draw_sensor_page(status)
+    elif user.loaded:
         user.draw(status)
     else:
         draw_simple(status)
