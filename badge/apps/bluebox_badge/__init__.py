@@ -455,7 +455,7 @@ def time_text():
         t = machine.RTC().datetime()
         if t[0] < 2024:
             return "--:--"
-        return "%02d:%02d" % (t[4], t[5])
+        return "%d:%02d %s" % (t[4] % 12 or 12, t[5], "AM" if t[4] < 12 else "PM")
     except Exception:
         return "--:--"
 
